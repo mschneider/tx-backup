@@ -1,0 +1,13 @@
+{
+  "devDependencies": {
+    "@types/node": "^18.7.13",
+    "nodemon": "^2.0.19",
+    "prisma": "^4.3.1",
+    "ts-node": "^10.9.1",
+    "typescript": "^4.8.2"
+  },
+  "dependencies": {
+    "@prisma/client": "4.3.1",
+    "@solana/web3.js": "^1.54.1"
+  }
+}
