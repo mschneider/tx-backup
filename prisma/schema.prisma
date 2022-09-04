@@ -24,7 +24,9 @@ model Transaction {
   hash String @unique
   slotId Int
   CUConsumed Int
-  CURequested Int  
+  CURequested Int 
+
+  @@index([slotId])
 }
 
 enum Modifier {
@@ -38,6 +40,9 @@ model AccountKey {
   txId Int
   addressId Int
   modifier Modifier @default(NONE)
+
+  @@index([txId])
+  @@index([addressId])
 }
 
 model AccountAddress {

@@ -1,33 +1,13 @@
+import * as dotenv from "dotenv";
+import { Modifier, PrismaClient } from "@prisma/client";
 import { Connection, PublicKey, SlotUpdate } from "@solana/web3.js";
 
-const conn = new Connection("https://testnet.rpcpool.com");
+const prisma = new PrismaClient();
+dotenv.config();
+const { RPC_URL } = process.env;
+const conn = new Connection(RPC_URL!);
 const commitment = "confirmed";
 const votePk = new PublicKey("Vote111111111111111111111111111111111111111");
-
-import { Modifier, PrismaClient } from "@prisma/client";
-const prisma = new PrismaClient();
-
-const sliceInto = <T>(items: T[], length: number) =>
-  items.reduce((chunks: T[][], item: T, index) => {
-    const offset = Math.floor(index / length);
-    chunks[offset] = ([] as T[]).concat(chunks[offset] || [], item);
-    return chunks;
-  }, []);
-
-async function onSlotUpdate(slotUpdate: SlotUpdate) {
-  if (slotUpdate.type == "optimisticConfirmation") console.log(slotUpdate);
-}
-
-async function getBlockMeta() {
-  const version = await conn.getVersion();
-  console.log({ version });
-  const slot = await conn.getSlot(commitment);
-  console.log({ slot });
-  const block = await conn.getBlock(slot, { commitment });
-  console.log({ block });
-  const tx = block?.transactions[0];
-  console.log("tx", tx);
-}
 
 const reset = false;
 // const reset = true;
@@ -45,13 +25,8 @@ async function getLastSlot() {
   }
 }
 
-async function main() {
-  const lastSlot = await getLastSlot();
-  const newSlots = await conn.getBlocks(lastSlot, undefined, commitment);
-  newSlots.shift();
-  console.log("newSlots", newSlots);
-
-  for (let slot of newSlots) {
+async function indexBlock(slot: number) {
+  try {
     const block = await conn.getBlock(slot, { commitment });
     const leader = block!.rewards!.find((r) => r.rewardType == "Fee")!.pubkey;
 
@@ -181,9 +156,35 @@ async function main() {
       "compute:",
       txToCreate.reduce((prev, current) => prev + current.CUConsumed, 0)
     );
+  } catch (e) {
+    console.error("could not index block", slot, e);
   }
+}
 
-  // main();
+async function eachLimit<T>(promises: Array<Promise<T>>, limit: number) {
+  let rest = promises.slice(limit);
+  await Promise.all(
+    promises.slice(0, limit).map(async (prom: Promise<T>) => {
+      await prom;
+      while (rest.length) {
+        await rest.shift();
+      }
+    })
+  );
+}
+
+async function main() {
+  const lastSlot = await getLastSlot();
+  const newSlots = await conn.getBlocks(lastSlot, undefined, commitment);
+  newSlots.shift();
+  console.log("fetch slots", newSlots);
+
+  await eachLimit(
+    newSlots.map((s) => indexBlock(s)),
+    16
+  );
+
+  main();
 }
 
 main();

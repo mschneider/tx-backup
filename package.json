@@ -1,5 +1,6 @@
 {
   "devDependencies": {
+    "@types/async": "^3.2.15",
     "@types/node": "^18.7.13",
     "nodemon": "^2.0.19",
     "prisma": "^4.3.1",
@@ -8,6 +9,7 @@
   },
   "dependencies": {
     "@prisma/client": "4.3.1",
-    "@solana/web3.js": "^1.54.1"
+    "@solana/web3.js": "^1.54.1",
+    "dotenv": "^16.0.2"
   }
 }
