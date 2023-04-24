@@ -1,6 +1,6 @@
 import * as dotenv from "dotenv";
-import { Modifier, PrismaClient } from "@prisma/client";
-import { Connection, PublicKey, SlotUpdate } from "@solana/web3.js";
+import { PrismaClient } from "@prisma/client";
+import { Connection, PublicKey } from "@solana/web3.js";
 
 const prisma = new PrismaClient();
 dotenv.config();
@@ -27,26 +27,25 @@ async function getLastSlot() {
 
 async function indexBlock(slot: number) {
   try {
-    const block = await conn.getBlock(slot, { commitment });
+    const block = await conn.getBlock(slot, { commitment, maxSupportedTransactionVersion: 1, rewards: true, transactionDetails: "full" });
     const leader = block!.rewards!.find((r) => r.rewardType == "Fee")!.pubkey;
 
     let nonVoteTxs = block!.transactions.filter(
-      (tx) => !tx.transaction.message.programIds()[0].equals(votePk)
+      (tx) => !tx.transaction.message.compiledInstructions.find(i => tx.transaction.message.staticAccountKeys[i.programIdIndex].equals(votePk))
     );
 
     const uniqueAccountKeys = new Set(
       nonVoteTxs
-        .map((tx) =>
-          tx.transaction.message.accountKeys.map((p) => p.toString())
-        )
-        .flat(1)
+        .map(tx => tx.transaction.message.getAccountKeys({accountKeysFromLookups: tx.meta?.loadedAddresses}).keySegments())
+        .flat(2)
+        .map(pk => pk.toString())
     );
 
     const txToCreate = nonVoteTxs.map((tx) => ({
       hash: tx.transaction.signatures[0],
       slotId: slot,
       CUConsumed: tx.meta?.computeUnitsConsumed!,
-      CURequested: tx.transaction.message.instructions.length * 200000,
+      CURequested: tx.transaction.message.compiledInstructions.length * 200000,
     }));
 
     const addrsToCreate = Array.from(uniqueAccountKeys.values())
@@ -83,46 +82,13 @@ async function indexBlock(slot: number) {
       const { id: txId } = txIds.find(
         (txid) => txid.hash == tx.transaction.signatures[0]
       )!;
-
-      const { accountKeys, header } = tx.transaction.message;
-      const numAccounts = accountKeys.length;
-      const numWriteableSigners =
-        header.numRequiredSignatures - header.numReadonlySignedAccounts;
-      const lockedSigners = accountKeys
-        .slice(0, numWriteableSigners)
-        .map((p) => ({
-          txId,
-          addressId: idByAddress[p.toString()],
-          modifier: Modifier.SIGNER,
-        }));
-
-      const numWritrableNonSigners =
-        numAccounts -
-        header.numRequiredSignatures -
-        header.numReadonlyUnsignedAccounts;
-
-      const lockedNonsigners = accountKeys
-        .slice(
-          header.numRequiredSignatures,
-          header.numRequiredSignatures + numWritrableNonSigners
-        )
-        .map((p) => ({
-          txId,
-          addressId: idByAddress[p.toString()],
-          modifier: Modifier.NONE,
-        }));
-
-      const programIds = tx.transaction.message.programIds().map((p) => ({
+      const programIds = tx.transaction.message.compiledInstructions.map(i => tx.transaction.message.staticAccountKeys[i.programIdIndex]);
+      const accountKeys = tx.transaction.message.getAccountKeys({accountKeysFromLookups: tx.meta?.loadedAddresses}).keySegments().flat(1);
+      recordedAccounts.push(...accountKeys.map((k, i) => ({
         txId,
-        addressId: idByAddress[p.toString()],
-        modifier: Modifier.PROGRAM,
-      }));
-
-      recordedAccounts.push(
-        ...lockedSigners,
-        ...lockedNonsigners,
-        ...programIds
-      );
+        addressId: idByAddress[k.toString()],
+        flags: (tx.transaction.message.isAccountWritable(i) ? 1 : 0) + (tx.transaction.message.isAccountSigner(i) ? 4 : programIds.includes(k) ? 8 : 0)
+      })));
     }
 
     await prisma.accountKey.createMany({
@@ -179,9 +145,13 @@ async function main() {
   newSlots.shift();
   console.log("fetch slots", newSlots);
 
+
+  // for (let s of newSlots) {
+  //   await indexBlock(s);
+  // }
   await eachLimit(
     newSlots.map((s) => indexBlock(s)),
-    16
+    5
   );
 
   main();

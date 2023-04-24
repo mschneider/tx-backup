@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -8,44 +5,37 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
 }
 
 model Slot {
-  id  Int   @id
-  parentId Int
-  leaderId Int?
+  id        Int      @id
+  parentId  Int
+  leaderId  Int?
   createdAt DateTime @default(now())
   blockTime DateTime
 }
 
 model Transaction {
-  id Int @id @default(autoincrement())
-  hash String @unique
-  slotId Int
-  CUConsumed Int
-  CURequested Int 
+  id          Int    @id @default(autoincrement())
+  hash        String @unique
+  slotId      Int
+  CUConsumed  Int
+  CURequested Int
 
   @@index([slotId])
 }
 
-enum Modifier {
-  NONE
-  SIGNER
-  PROGRAM
-}
-
 model AccountKey {
-  id Int @id @default(autoincrement())
-  txId Int
+  id        Int           @id @default(autoincrement())
+  txId      Int
   addressId Int
-  modifier Modifier @default(NONE)
+  flags     Int
 
   @@index([txId])
   @@index([addressId])
 }
 
 model AccountAddress {
-  id Int @id @default(autoincrement())
+  id      Int    @id @default(autoincrement())
   address String @unique
 }
