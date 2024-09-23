@@ -11,6 +11,8 @@
     "@prisma/client": "4.3.1",
     "@solana/buffer-layout": "^4.0.1",
     "@solana/web3.js": "^1.54.1",
-    "dotenv": "^16.0.2"
+    "dotenv": "^16.0.2",
+    "sanctum-lst-list": "^0.2.29",
+    "undici": "^6.19.8"
   }
 }

@@ -41,3 +41,13 @@ model AccountAddress {
   id      Int    @id @default(autoincrement())
   address String @unique
 }
+
+model Lst {
+  id        Int    @id @default(autoincrement())
+  name      String
+  mint      String
+  votePk    String
+  signer    String
+  price     Float
+  createdAt DateTime @default(now())
+}

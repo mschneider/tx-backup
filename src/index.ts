@@ -1,6 +1,6 @@
 import * as dotenv from "dotenv";
 import { PrismaClient } from "@prisma/client";
-import { AddressLookupTableAccount, ComputeBudgetInstruction, ComputeBudgetProgram, Connection, PublicKey } from "@solana/web3.js";
+import { AccountInfo, AddressLookupTableAccount, ComputeBudgetInstruction, ComputeBudgetProgram, Connection, PublicKey } from "@solana/web3.js";
 import * as lo from "@solana/buffer-layout";
 
 const prisma = new PrismaClient();
@@ -55,7 +55,11 @@ async function indexBlock(slot: number) {
 
     // update ALT cache
     const newAltPks = altPks.filter(pk => !altCache[pk.toString()]);
-    const newAltAis = await conn.getMultipleAccountsInfo(newAltPks);
+    let newAltAis: (AccountInfo<Buffer>|null)[] = [];
+    for (let processed = 0; processed < newAltPks.length; processed += 100) {
+      let end = Math.min(processed + 100, newAltPks.length);
+      newAltAis.push(...await conn.getMultipleAccountsInfo(newAltPks.slice(processed, end)))
+    }
     newAltPks.forEach(
       (key, i) => {
         let alt = new AddressLookupTableAccount({
@@ -66,15 +70,14 @@ async function indexBlock(slot: number) {
       }
     );
 
-
     const txToCreate = nonVoteTxs.map((tx) => {
       const hash = tx.transaction.signatures[0];
       const CUConsumed = tx.meta?.computeUnitsConsumed!;
-      const CURequested = tx.transaction.message.compiledInstructions.length * 200000;
 
       // decode account keys
       const addressLookupTableAccounts = tx.transaction.message.addressTableLookups.map(alt => altCache[alt.accountKey.toString()]);
       const accountKeys = tx.transaction.message.getAccountKeys({ addressLookupTableAccounts }).keySegments().flat();
+      const computeBudgetIndex = accountKeys.findIndex(k => k.equals(ComputeBudgetProgram.programId));
 
       // calculate jito tip
       let TipPaid = 0;
@@ -85,12 +88,18 @@ async function indexBlock(slot: number) {
         }
       }
 
+      // calculate compute limit
+      let CURequested = tx.transaction.message.compiledInstructions.length * 200000;
+      const computeLimitIx = tx.transaction.message.compiledInstructions.find(ix => ix.programIdIndex == computeBudgetIndex && ix.data[0] == 2);
+      if (computeLimitIx) {
+        CURequested = lo.u32().decode(computeLimitIx.data, 1)
+      }
+
       // calculate priorioty fee
       let PriorityPaid = 0;
-      const computeBudgetIndex = accountKeys.findIndex(k => k.equals(ComputeBudgetProgram.programId));
-      const computeLimitIx = tx.transaction.message.compiledInstructions.find(ix => ix.programIdIndex == computeBudgetIndex && ix.data[0] == 3);
-      if (computeLimitIx) {
-        PriorityPaid = lo.nu64().decode(computeLimitIx.data, 1)
+      const computePriceIx = tx.transaction.message.compiledInstructions.find(ix => ix.programIdIndex == computeBudgetIndex && ix.data[0] == 3);
+      if (computePriceIx) {
+        PriorityPaid = Math.floor(lo.nu64().decode(computePriceIx.data, 1) * CURequested / 1_000_000)
       }
 
       return {
