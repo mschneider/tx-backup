@@ -16,11 +16,13 @@ model Slot {
 }
 
 model Transaction {
-  id          Int    @id @default(autoincrement())
-  hash        String @unique
-  slotId      Int
-  CUConsumed  Int
-  CURequested Int
+  id           Int    @id @default(autoincrement())
+  hash         String @unique
+  slotId       Int
+  CUConsumed   Int
+  CURequested  Int
+  TipPaid      Int
+  PriorityPaid Int
 
   @@index([slotId])
 }
