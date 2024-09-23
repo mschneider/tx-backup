@@ -62,11 +62,24 @@ async function indexBlock(slot: number) {
     }
     newAltPks.forEach(
       (key, i) => {
-        let alt = new AddressLookupTableAccount({
-          key,
-          state: AddressLookupTableAccount.deserialize(newAltAis[i]!.data),
-        })
-        altCache[key.toString()] = alt;
+        if (newAltAis[i]) {
+          let alt = new AddressLookupTableAccount({
+            key,
+            state: AddressLookupTableAccount.deserialize(newAltAis[i]!.data),
+          })
+          altCache[key.toString()] = alt;
+        } else {
+          altCache[key.toString()] =  new AddressLookupTableAccount({
+            key,
+            state: {
+              deactivationSlot: BigInt(0),
+              lastExtendedSlot: 0,
+              lastExtendedSlotStartIndex: 0,
+              authority: PublicKey.default,
+              addresses: Array.from({length: 128}, () => PublicKey.default)
+          }
+          })
+        }
       }
     );
 
